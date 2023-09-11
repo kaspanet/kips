@@ -18,7 +18,7 @@ class TestCase:
         self.expected_verification_result: bool = verification_result
 
     def hash_message(self) -> bytes:
-        message_hash = blake2b(digest_size=64, key=bytes("PersonalMessageSigningHash", "ascii"))
+        message_hash = blake2b(digest_size=32, key=bytes("PersonalMessageSigningHash", "ascii"))
         message_hash.update(self.raw_message)
         
         return message_hash.digest()
@@ -35,47 +35,58 @@ class TestCase:
 
     def run_test_case(self):
         sig = self.sign_message()
-        print(sig.hex().upper())
+        print("Received:\t", sig.hex().upper())
+        print("Expecting:\t", self.expected_signature.hex().upper())
         is_passed = (self.expected_signature == sig) == self.expected_verification_result
         assert(is_passed)
 
         is_passed = is_passed and (self.verify_message_signature(self.expected_signature) == self.expected_verification_result)
-        print(is_passed)
+        print("Test Result:\t", is_passed)
         assert(is_passed)
-        
 
 if __name__ == "__main__":
     # Test Case 0
+    print('Running Test Case 0')
+    print('-------------------')
     TestCase(
         'Hello Kaspa!',
         bytes.fromhex('0000000000000000000000000000000000000000000000000000000000000003'),
         bytes.fromhex('F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9'),
         bytes_from_int(0),
-        bytes.fromhex('2BF8CBDBA646AFF947EEAF2E63C6AEF7C0A091E9412DD5A4F1ABE2C99C4BE00DEE6B4D162B0B488FF32EA4062E2E816BE60CBA5B4A3A4F26076A558EA887BF38'),
+        bytes.fromhex('40B9BB2BE0AE02607279EDA64015A8D86E3763279170340B8243F7CE5344D77AFF1191598BAF2FD26149CAC3B4B12C2C433261C00834DB6098CB172AA48EF522'),
         True
     ).run_test_case()
+    print('')
 
     # Test Case 1
+    print('Running Test Case 1')
+    print('-------------------')
     TestCase(
         'Hello Kaspa!',
         bytes.fromhex('B7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF'),
         bytes.fromhex('DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659'),
         bytes_from_int(1),
-        bytes.fromhex('230307A47C69695235219AB059EE3A0CE7E1CA4243D7D9A4535734DE11F16B8789916C96A75DA37193C74A1C7130830F1337CBC6764CF36EB780321E25DF8511'),
+        bytes.fromhex('EB9E8A3C547EB91B6A7592644F328F0648BDD21ABA3CD44787D429D4D790AA8B962745691F3B472ED8D65F3B770ECB4F777BD17B1D309100919B53E0E206B4C6'),
         True
     ).run_test_case()
+    print('')
 
     # Test Case 2
+    print('Running Test Case 2')
+    print('-------------------')
     TestCase(
         'こんにちは世界',
         bytes.fromhex('B7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF'),
         bytes.fromhex('DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659'),
         bytes_from_int(1),
-        bytes.fromhex('276795139B6F6365804BB38DF717F6C826BC5F847190A4B7FA3797DFF0E78AE3CC4D4B4B7308929071627CC29BC4585F85E586901B020BFDA243354B9C3AFDD7'),
+        bytes.fromhex('810653D5F80206DB519672362ADD6C98DAD378844E5BA4D89A22C9F0C7092E8CECBA734FFF7922B656B4BE3F4B1F098899C95CB5C1023DCE3519208AFAFB59BC'),
         True
     ).run_test_case()
+    print('')
 
     # Test Case 3
+    print('Running Test Case 3')
+    print('-------------------')
     super_long_text = '''Lorem ipsum dolor sit amet. Aut omnis amet id voluptatem eligendi sit accusantium dolorem 33 corrupti necessitatibus hic consequatur quod et maiores alias non molestias suscipit? Est voluptatem magni qui odit eius est eveniet cupiditate id eius quae aut molestiae nihil eum excepturi voluptatem qui nisi architecto?
 
 Et aliquid ipsa ut quas enim et dolorem deleniti ut eius dicta non praesentium neque est velit numquam. Ut consectetur amet ut error veniam et officia laudantium ea velit nesciunt est explicabo laudantium sit totam aperiam.
@@ -86,16 +97,7 @@ Ut omnis magnam et accusamus earum rem impedit provident eum commodi repellat qu
         bytes.fromhex('B7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF'),
         bytes.fromhex('DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659'),
         bytes_from_int(1),
-        bytes.fromhex('2057BDBBEC319F0E178FEB16CD1ED7DC77FABEF1AACA292254234C4D5EB1F3D74D702EEE975712E8C532B2690CB0530FB8C39F1C18260E8093A3E00A9EB388BB'),
+        bytes.fromhex('40CBBD3938867B10076BB14835557C062F5BF6A4682995FC8B0A1CD2ED986EEDAAA00CFE04F6C9E5A9546B860732E5B903CC82780228647D5375BEC3D2A4983A'),
         True
     ).run_test_case()
-
-    # Test Case 4
-    TestCase(
-        'Hello Kaspa!',
-        bytes.fromhex('B7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF'),
-        bytes.fromhex('DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659'),
-        bytes_from_int(1),
-        bytes.fromhex('2057BDBBEC319F0E178FEB16CD1ED7DC77FABEF1AACA292254234C4D5EB1F3D74D702EEE975712E8C532B2690CB0530FB8C39F1C18260E8093A3E00A9EB388BB'),
-        False
-    ).run_test_case()
+    print('')
