@@ -47,27 +47,72 @@ new CustomEvent(type, {"detail":eventData})
 ## Provider Events
 
 ### `kaspa:provider`
-- Sent by the wallet, includes provider information. The purpose is to allow Web App to discover the wallet. (this event is emitted in response to `kaspa:requestProvider` application event)
+
+```
+Sender: Wallet
+Purpose: Allow Web App to discover the wallet.
+```
+
+```typescript
+interface KaspaProviderDetail {
+info: KaspaProviderInfo
+provider: KaspaProvider
+}
+
+/**
+ * Represents the assets needed to display a wallet
+ */
+interface KaspaProviderInfo {
+	id: string;
+	name: string;
+	icon: string;
+	capabilities: Object
+}
+
+interface KaspaProvider {
+ request: (args:RequestArguments)=>Promise<unknown>;
+ connect: ()=>Promise<void>;
+ disconnect(): ()=>Promise<void>;
+}
+
+interface RequestArguments {
+ method: string;
+ params?: object;
+}
+```
 
 ### `kaspa:connect`
 
-#### Sender: 
-[Web App](#web-app)
-
-#### Input parameters
-Extension ID of the [wallet](#wallet)
-
-#### Purpose
-The purpose is to establish a connection between the Web App and the wallet, allowing further communication. Not related to any protocol.
-
-#### Behavior
- On success, an account event MUST be emitted by the provider.
-
-# TODO continue formatting event details.
+```
+Sender: Web app
+Purpose: Establish a connection between the Web App and the wallet, allowing further communication.
+```
+```typescript
+type extensionId=string; // Extension id of the wallet
+```
 
 ### `kaspa:event`
-Sent by the wallet, includes the event data with an event id if it's an invoked event. It is used to send data or events from the wallet back to the Web App.
-This event contains an Event object that the Web App needs to handle. The Event includes an id, event and data, with an optional error field.
+
+```
+Sender: Wallet
+Purpose: Used to send data from the wallet to the web app.
+```
+
+
+```typescript
+interface Response {
+  protocol: string,
+  data: any
+}
+
+interface Event {
+  eventId:string, // UUID as [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+  extensionId:string,
+  data:Response,
+  error:string | undefined
+}
+```
+
 
 ### `kaspa:disconnect`
 Sent by the wallet or Web App, this event has no additional data (maybe reason, describing the reason for disconnect i.e. Rejected etc.). It indicates that the connection between the Web App and the wallet has been or should be terminated. This event is also emitted when a connection request is rejected.
@@ -80,9 +125,30 @@ Sent by the Web App, this event has no additional data. It is used to request wa
 Sent by the Web App, contains a request that the wallet needs to handle. It allows the Web App to invoke specific actions or requests in the wallet.
 This event contains a Request object that the wallet needs to handle. The Request includes an id, protocol, method, and params, which define the specific action or request the Web App is invoking in the wallet.
 
+```
+Sender: Web App
+Purpose: Request the wallet for a specific action
+```
+
+```typescript
+interface Request {
+  protocol: string,
+  method: string,
+  params: Object
+}
+
+interface Event {
+  eventId:string, // UUID as [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+  extensionId:string,
+  data:Request,
+  error:string | undefined
+}
+```
+
 
 # KaspaProviderDetail
 `KaspaProviderDetail` is an object that MUST include the following 
+
 ```typescript
 interface KaspaProviderDetail {
 info: KaspaProviderInfo
@@ -91,41 +157,17 @@ provider: KaspaProvider
 ```
 
 
+
+# `KaspaProvider`
+
+
+
 # `KaspaProviderInfo`
 `id` (unique extension identifier, typically a UUID or an ID accessible from the extension as `browser.runtime.id`)
 `name : string`
 `icon : string`
 `capabilities : string[]`
-```typescript
 
-/**
- * Represents the assets needed to display a wallet
- */
-interface KaspaProviderInfo {
-	id: string;
-	name: string;
-	icon: string;
-	capabilities: Object
-}
-```
-# `KaspaProvider`
-```typescript
-interface RequestArguments {
- method: string;
- params?: object;
-}
-interface SendResponse {
- success: bool;
- txid: string;
-}
-
-
-interface KaspaProvider {
- request: (args:RequestArguments)=>Promise<unknown>;
- connect: ()=>Promise<void>;
- disconnect(): ()=>Promise<void>;
-}
-```
 
 
 # The connect method
