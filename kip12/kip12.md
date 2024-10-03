@@ -45,6 +45,7 @@ new CustomEvent(type, {"detail":eventData})
 ```
 
 ## Provider Events
+This section contains all the events that are part of this KIP as well as their specified content, with description of the expected behavior.
 
 ### `kaspa:provider`
 
@@ -55,29 +56,89 @@ Purpose: Allow Web App to discover the wallet.
 
 ```typescript
 interface KaspaProviderDetail {
-info: KaspaProviderInfo
-provider: KaspaProvider
+  info: KaspaProviderInfo
+  provider: KaspaProvider
 }
 
-/**
- * Represents the assets needed to display a wallet
- */
 interface KaspaProviderInfo {
-	id: string;
-	name: string;
-	icon: string;
-	capabilities: Object
+  id: string;
+  name: string;
+  icon: string;
+  capabilities: string[]
 }
 
 interface KaspaProvider {
- request: (args:RequestArguments)=>Promise<unknown>;
- connect: ()=>Promise<void>;
- disconnect(): ()=>Promise<void>;
+  request: (args:Request)=>Promise<unknown>;
+  connect: ()=>Promise<void>;
+  disconnect(): ()=>Promise<void>;
 }
 
-interface RequestArguments {
- method: string;
- params?: object;
+interface Request {
+  protocol: string,
+  method: string,
+  params: Object
+}
+
+interface Request {
+  protocol: string,
+  method: string,
+  params: Object
+}
+
+interface Event {
+  eventId:string, // UUID as [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+  extensionId:string, // `browser.runtime.id`
+  data:Request,
+  error:string | undefined
+}
+
+async function request(request:Request):Promise<unknown>{
+  const requestEvent = new CustomEvent("kaspa:invoke", {
+      detail: Object.freeze({
+        eventId: uuidv4(),
+        extensionId: browser.runtime.id,
+        data: request,
+        error: undefined,
+      })
+    }
+  );
+
+  window.dispatchEvent(requestEvent);
+
+  return new Promise((resolve, reject) => {
+    window.addEventListener("kaspa:event", (event: Event) => {
+      if (event.eventId === request.eventId) {
+        if (event.error) {
+          reject(event.error);
+        } else {
+          resolve(event.data);
+        }
+      }
+    });
+  });
+}
+
+async function connect():Promise<void>{
+  const connectEvent = new CustomEvent("kaspa:connect", {
+    detail: Object.freeze({ 
+      eventId: uuidv4(),
+      extensionId: browser.runtime.id,
+     }),
+  });
+
+  window.dispatchEvent(connectEvent);
+
+  return new Promise((resolve, reject) => {
+    window.addEventListener("kaspa:event", (event: Event) => {
+      if (event.eventId === connectEvent.eventId) {
+        if (event.error) {
+          reject(event.error);
+        } else {
+          resolve();
+        }
+      }
+    });
+  });
 }
 ```
 
@@ -88,7 +149,10 @@ Sender: Web app
 Purpose: Establish a connection between the Web App and the wallet, allowing further communication.
 ```
 ```typescript
-type extensionId=string; // Extension id of the wallet
+interface Connect {
+  eventId:string, // UUID as [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
+  extensionId:string, // `browser.runtime.id`
+}
 ```
 
 ### `kaspa:event`
@@ -107,19 +171,39 @@ interface Response {
 
 interface Event {
   eventId:string, // UUID as [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
-  extensionId:string,
+  extensionId:string, // `browser.runtime.id`
   data:Response,
   error:string | undefined
 }
 ```
 
-
 ### `kaspa:disconnect`
-Sent by the wallet or Web App, this event has no additional data (maybe reason, describing the reason for disconnect i.e. Rejected etc.). It indicates that the connection between the Web App and the wallet has been or should be terminated. This event is also emitted when a connection request is rejected.
-Application Events (requests)
+
+```
+Sender: Wallet or Web App
+Purpose: To signal to the corresponding party that a connection has been terminated from the sending part, and that the sender party will no longer respond to requests nor react to any kind of data transmitted by the sender.
+```
+
+```typescript
+interface Disconnect {
+  eventId:string, // UUID as [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
+  extensionId:string, // `browser.runtime.id`
+  reason:string
+}
+```
+
 
 ### `kaspa:requestProvider`
-Sent by the Web App, this event has no additional data. It is used to request wallets to announce themselves by emitting the kaspa:provider event.
+
+```
+Sender: Web App
+Purpose: To request wallets to announce themselves by emitting the kaspa:provider event.
+```
+
+```typescript
+// No additional data
+```
+
 
 ### `kaspa:invoke`
 Sent by the Web App, contains a request that the wallet needs to handle. It allows the Web App to invoke specific actions or requests in the wallet.
@@ -127,7 +211,7 @@ This event contains a Request object that the wallet needs to handle. The Reques
 
 ```
 Sender: Web App
-Purpose: Request the wallet for a specific action
+Purpose: Used internally, by the provided request() method to request the wallet for a specific action. Not intended for direct usage.
 ```
 
 ```typescript
@@ -139,7 +223,7 @@ interface Request {
 
 interface Event {
   eventId:string, // UUID as [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
-  extensionId:string,
+  extensionId:string, // `browser.runtime.id`
   data:Request,
   error:string | undefined
 }
@@ -218,9 +302,6 @@ request = {
   ]
 }
 ```
-
-
-
 
 
 
