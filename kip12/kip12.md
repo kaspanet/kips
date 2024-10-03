@@ -64,8 +64,14 @@ interface KaspaProviderInfo {
   id: string;
   name: string;
   icon: string;
-  capabilities: string[]
+  capabilities: Capability[] 
 }
+
+interface Capability {
+  protocol: string; // Protocol name, e.g. "KASPA", "KRC-20", "KSC"
+  methods: string[]; // Array of method names in kebab-case : "get-account", "send", "sign-message
+}
+
 
 interface KaspaProvider {
   request: (args:Request)=>Promise<unknown>;
@@ -120,10 +126,10 @@ async function request(request:Request):Promise<unknown>{
 
 async function connect():Promise<void>{
   const connectEvent = new CustomEvent("kaspa:connect", {
-    detail: Object.freeze({ 
+    detail: Object.freeze({
       eventId: uuidv4(),
       extensionId: browser.runtime.id,
-     }),
+    }),
   });
 
   window.dispatchEvent(connectEvent);
@@ -131,6 +137,30 @@ async function connect():Promise<void>{
   return new Promise((resolve, reject) => {
     window.addEventListener("kaspa:event", (event: Event) => {
       if (event.eventId === connectEvent.eventId) {
+        if (event.error) {
+          reject(event.error);
+        } else {
+          resolve();
+        }
+      }
+    });
+  });
+}
+
+async function disconnect():Promise<void>{
+  const disconnectEvent = new CustomEvent("kaspa:disconnect", {
+    detail: Object.freeze({
+      eventId: uuidv4(),
+      extensionId: browser.runtime.id,
+      reason: "User initiated",
+    }),
+  });
+
+  window.dispatchEvent(disconnectEvent);
+
+  return new Promise((resolve, reject) => {
+    window.addEventListener("kaspa:event", (event: Event) => {
+      if (event.eventId === disconnectEvent.eventId) {
         if (event.error) {
           reject(event.error);
         } else {
@@ -227,134 +257,4 @@ interface Event {
   data:Request,
   error:string | undefined
 }
-```
-
-
-# KaspaProviderDetail
-`KaspaProviderDetail` is an object that MUST include the following 
-
-```typescript
-interface KaspaProviderDetail {
-info: KaspaProviderInfo
-provider: KaspaProvider
-}
-```
-
-
-
-# `KaspaProvider`
-
-
-
-# `KaspaProviderInfo`
-`id` (unique extension identifier, typically a UUID or an ID accessible from the extension as `browser.runtime.id`)
-`name : string`
-`icon : string`
-`capabilities : string[]`
-
-
-
-# The connect method
-
-function connect(){
-    emit connect event
-    wait for response
-    resolve or reject promise
-}
-# The disconnect method
-
-function disconnect(){
-    emit disconnect event
-    wait for response
-    resolve or reject promise
-}
-
-
-
-# The request method
-The request method should have extension id hardcoded
-function request() {
-    emit invoke event
-    wait for response
-    resolve or reject promise
-}
-
-
-Wallet Capabilities Object
-Wallet capabilities object is comprised of keys and values where the key is the protocol name and the value is the string array of the protocol-specific API methods.  API method names MUST be specified in "kebab-case" format.
-```typescript
-capabilities : {
-	"KASPA" : ["get-account", "send", "sign-message"],
-	"KRC-20" : ["get-account", "send", "mint", "deploy"],
-	"KSC" : ["execute"]
-}
-```
-Note about messages transmitted between extensions and clients: ALL messages transmitted to an extension should be accompanied by an id property containing a unique ID, in the event of a response from an extension the response MUST reference the initial ID sent by the client.
-
-```typescript
-request = {
-  protocol : "KASPA",
-  method : "send",
-  params : [
-    "kaspa:...",
-    "123.45",
-    "1.0"
-  ]
-}
-```
-
-
-
-
-```typescript
-let info: KaspaProviderInfo;
-let provider: KaspaProvider;
-const announceEvent: KaspaAnnounceProviderEvent = new CustomEvent(
-  "kaspa:announceProvider",
-  { detail: Object.freeze({ info, provider }) }
-);
-// The Wallet dispatches an announce event which is heard by
-// the Web App code that had run earlier
-window.dispatchEvent(announceEvent);
-// The Wallet listens to the request events which may be
-// dispatched later and re-dispatches the `EIP6963AnnounceProviderEvent`
-window.addEventListener("kaspa:requestProvider", () => {
-  window.dispatchEvent(announceEvent);
-});
-```
-```typescript
-// The Web App listens to announced providers
-window.addEventListener(
-  "kaspa:announceProvider",
-  (event: KaspaAnnounceProviderEvent) => {}
-);
-// The Web App dispatches a request event which will be heard by 
-// Wallets' code that had run earlier
-window.dispatchEvent(new Event("kaspa:requestProvider"));
-```
-```typescript
-function onPageLoad() {
-
-  function announceProvider() {
-    const info: KaspaProviderInfo = {
-	      uuid: "eccb1a1a-9e1b-43ea-bf3e-915f8f9de7c6",
-	      name: "Example Wallet",
-      	icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>",
-	};
-    window.dispatchEvent(
-      new CustomEvent("kaspa:provider", {
-        detail: Object.freeze({ info, provider }),
-      })
-    );
-  }
-
-  window.addEventListener(
-    "kaspa:requestProvider",
-    (event: KaspaRequestProviderEvent) => {
-      announceProvider();
-    }
-  );
-  announceProvider();
-}
-
 ```
