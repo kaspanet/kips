@@ -16,8 +16,8 @@ Kaspa Improvement Proposals (KIPs) describe standards for the Kaspa network, inc
 
 ### Submission Process
 1. Fork the [KIPs repository](https://github.com/kaspanet/kips)
-2. Copy `kip-0000-template.md` and rename it to `kip-XXXX.md` (where XXXX is your KIP number)3. Fill out all sections of the template including:
-   - KIP number
+2. Fill out all sections of the template including:
+   - KIP number XXXX
    - Layer (Consensus, Network, API/RPC, etc.)
    - Title
    - Author(s)
