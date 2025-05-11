@@ -11,21 +11,18 @@ Kaspa Improvement Proposals (KIPs) describe standards for the Kaspa network, inc
 ## Contributing
 
 ### Before Submitting a KIP
-1. **Discuss your idea** on the [Kaspa Discord](https://discord.gg/kaspa) or [GitHub Discussions](https://github.com/kaspanet/kips/discussions)
-2. **Review [KIP-1](https://github.com/kaspanet/kips/blob/master/kip-0001.md)** - the KIP purpose and guidelines
-3. **Check for duplicates** - ensure your proposal doesn't overlap with existing KIPs
+1. **Discuss your idea** with developers
+2. **Check for duplicates** - ensure your proposal doesn't overlap with existing KIPs
 
 ### Submission Process
 1. Fork the [KIPs repository](https://github.com/kaspanet/kips)
-2. Copy `kip-0000-template.md` and rename it to `kip-XXXX.md` (where XXXX is your KIP number)
-3. Fill out all sections of the template including:
+2. Copy `kip-0000-template.md` and rename it to `kip-XXXX.md` (where XXXX is your KIP number)3. Fill out all sections of the template including:
    - KIP number
    - Layer (Consensus, Network, API/RPC, etc.)
    - Title
-   - Authors
-   - Status
+   - Author(s)
    - Specification
-4. Submit a Pull Request to the KIPs repository
+3. Submit a Pull Request to the KIPs repository
 
 ## KIP Status Terms
 - **Proposed** - Initial proposal stage, open for discussion
