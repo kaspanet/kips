@@ -7,6 +7,7 @@
   Status: Draft
   Type: Informational
   created: 2026-04-20
+  updated: 2026-04-21
 ```
 
 # Motivation
@@ -30,23 +31,27 @@ different vendors.
 
 A secondary concern is inclusivity of constrained signing devices.
 The PSKT wire format today — JSON wrapped in hex — is clear and
-easy to parse but approximately 2x the size of an equivalent
-binary encoding. A 2-of-3 single-input PSKB is about 3.2 KB on the
-wire, which translates to 18-32 QR frames on low-resolution
-cameras. Multi-input ceremonies and larger M-of-N configurations
-push this into ranges where the UX becomes impractical on
-sub-$20 hardware. Flagship hardware wallets with HD cameras or
-NFC/USB links are unaffected. This KIP proposes optional, opt-in
-compact mechanisms in a later section that, when advertised by
-both endpoints, reduce wire size without altering the semantic
-format or consensus.
+easy to parse but doubles the wire size of every binary-typed
+field (each byte costs 2 hex chars). A 2-of-3 single-input PSKB
+measures roughly 2.6-3.2 KB on the wire (depending on how much
+key-origin metadata the creator populates), which translates to
+roughly 12-25 QR frames at the V9-L to V6-L byte-mode capacities
+typical of sub-$20 cameras. Multi-input ceremonies and larger
+M-of-N configurations push this into ranges where the UX becomes
+impractical on sub-$20 hardware. Flagship hardware wallets with
+HD cameras or NFC/USB links are unaffected. This KIP proposes
+optional, opt-in compact mechanisms in a later section that, when
+advertised by both endpoints, reduce wire size without altering
+the semantic format or consensus.
 
-This KIP also documents three Kaspa-specific behaviors of the
-consensus layer that differ from the Bitcoin tooling most wallet
-authors will be familiar with. These behaviors are not proposed
-changes — they are existing behaviors that are currently not
-documented anywhere a wallet author can easily find them, and
-that fail-close at broadcast time when missed.
+This KIP also clarifies a few places where Kaspa's script engine
+and PSKT serialization differ from the Bitcoin PSBT tooling that
+most wallet authors will be familiar with. These are existing
+Kaspa behaviors, authoritatively defined and tested in
+`rusty-kaspa/crypto/txscript/src/lib.rs`. The purpose of restating
+them here is to make them easy to find for wallet authors porting
+PSBT-multisig patterns, who might otherwise assume Bitcoin
+semantics apply unchanged.
 
 # Scope
 
@@ -57,8 +62,9 @@ It:
 1. Defines wallet-level conventions above the existing PSKT
    substrate (derivation path, pubkey ordering, descriptor format,
    sig_script assembly).
-2. Documents three existing Kaspa consensus behaviors that
-   currently lack documentation.
+2. Points wallet authors to the authoritative script-engine
+   implementation (`rusty-kaspa/crypto/txscript`) for a few places
+   where Kaspa's semantics diverge from Bitcoin PSBT assumptions.
 3. Proposes, in a non-normative appendix, a set of optional
    compact encoding mechanisms for PSKT exchange on
    constrained-device transports, to be considered for upstream
@@ -69,21 +75,24 @@ It:
 Multisig cosigner keys SHOULD be derived at:
 
 ```
-m / 44' / coin_type' / account' / chain / index
+m / 44' / coin_type' / account' / change / index
 ```
 
 where:
 
 * `coin_type = 111111` on mainnet, `1` on testnet (per SLIP-44)
-* `chain = 0` for receive keys, `1` for change keys
+* `change = 0` for receive keys, `1` for change keys
 * `account` is typically `0`
 
-This is the same derivation path used for single-signature wallets.
-Reusing it — rather than adopting BIP-87-style dual accounts that
-separate single-sig and multi-sig — lets one seed serve both use
-cases without requiring users to manage multiple accounts. Wallet
-authors who prefer dual-account separation are not prohibited from
-doing so, but SHOULD document the departure explicitly so
+The `change` level follows BIP-44 naming: `change = 0` for
+externally-visible receive addresses, `change = 1` for internal
+change addresses returned to the wallet. This is the same
+derivation path used for single-signature wallets. Reusing it —
+rather than adopting BIP-87-style dual accounts that separate
+single-sig and multi-sig — lets one seed serve both use cases
+without requiring users to manage multiple accounts. Wallet
+authors who prefer dual-account separation are not prohibited
+from doing so, but SHOULD document the departure explicitly so
 cosigners using other conventions can derive the expected keys.
 
 # Cosigner pubkey ordering
@@ -96,6 +105,12 @@ This makes the multisig P2SH address deterministic: cosigners
 produce the same address regardless of the order in which their
 keys are exchanged during wallet setup. This is equivalent in
 spirit to Bitcoin's BIP-67 `sortedmulti`.
+
+Upstream `kaspa_txscript::multisig_redeem_script` and
+`multisig_redeem_script_ecdsa` emit pubkeys in the caller-supplied
+iterator order; they do not sort internally. Wallets therefore
+MUST sort before calling these helpers (or before constructing
+the redeem script by hand).
 
 Rationale: unsorted multisigs produce different P2SH addresses for
 the same set of cosigners depending on exchange order, which has
@@ -113,10 +128,15 @@ OP_N  OP_CHECKMULTISIG
 ```
 
 where `pk1..pkN` are the lex-sorted 32-byte x-only pubkeys,
-`OP_M = 0x50 + M`, `OP_N = 0x50 + N`, `OP_DATA_32 = 0x20`, and
-`OP_CHECKMULTISIG = 0xAE`.
+`OP_M = 0x50 + M` (for M ∈ [1,16]), `OP_N = 0x50 + N` (for N ∈
+[1,16]), `OP_DATA_32 = 0x20`, and `OP_CHECKMULTISIG = 0xAE`. For M
+or N in the range [17,20], the numeric opcode is encoded as
+`OpData1 + <value>` (2 bytes each) rather than as a small-integer
+opcode.
 
-Total size: `2 + N * 33` bytes. For 2-of-3: 101 bytes.
+Total size (for M,N ≤ 16): `3 + N*33` bytes — 1 byte for `OP_M`,
+`N * 33` for the pubkey pushes, 1 byte for `OP_N`, 1 byte for
+`OP_CHECKMULTISIG`. For 2-of-3: 102 bytes. For 3-of-5: 168 bytes.
 
 The resulting P2SH `scriptPublicKey` is:
 
@@ -129,28 +149,52 @@ OP_BLAKE2B  <OP_DATA_32 blake2b-256(redeem_script)>  OP_EQUAL
 # PSKT input `sigOpCount` for P2SH multisig
 
 For a P2SH multisig input, the PSKT input's `sigOpCount` field
-MUST equal **N** (the total number of cosigner pubkeys in the
-redeem script), NOT M (the signature threshold).
+MUST satisfy:
+
+```
+M ≤ sigOpCount ≤ N
+```
+
+where M is the signature threshold and N is the total number of
+cosigner pubkeys in the redeem script. Any value in that range is
+accepted; the exact number of signature operations consumed at
+validation time depends on the script's execution path and can be
+computed authoritatively by calling `get_sig_op_count` in
+`rusty-kaspa/crypto/txscript/src/lib.rs`, which simulates input
+validation and returns the count actually used.
+
+For wallets following the conventions in this KIP — lex-sorted
+pubkeys in the redeem script and partial signatures emitted in
+that same order — the script engine matches each signature against
+its corresponding pubkey on the first probe, consuming exactly
+M signature operations. Under these conventions **`sigOpCount = M`
+is sufficient and tight.**
+
+N remains a safe upper bound and is always accepted; it
+over-allocates sig-op budget at block-mass accounting time but
+never causes a rejection.
 
 ## Rationale
 
-Kaspa consensus `get_sig_op_count` pre-counts signature operations
-in an input's `sig_script` by walking the redeem script and
-counting `OP_CHECKMULTISIG` as worth N operations. A UTXO that
-declares a `sigOpCount` smaller than N triggers the error
-`"sig op count exceeds passed limit of M"` at broadcast time, and
-the transaction is rejected by the node.
-
-This behavior already exists in Kaspa consensus and is not under
-discussion. The purpose of documenting it here is so that wallet
-authors do not discover it via mainnet broadcast rejection.
+Kaspa's script engine uses a runtime signature-operation counter
+(see `op_check_multisig_schnorr_or_ecdsa` in
+`rusty-kaspa/crypto/txscript/src/lib.rs`). The counter is
+decremented on each signature probe — including probes that do
+not result in a match. For scripts with conditional branches or
+out-of-order signature assembly the count consumed can be less
+than or greater than M, up to N; hence the range.
 
 Some PSBT-multisig tooling in the Bitcoin ecosystem sets the
-equivalent field to M. Kaspa PSKT producers MUST use N.
+equivalent field to M by convention, which remains correct in
+Kaspa provided the signer follows the ordered-emission convention.
+Tooling that cannot guarantee ordered emission should either use
+`get_sig_op_count` to compute the exact value or set `sigOpCount
+= N` as a safe upper bound.
 
-This is fail-closed: a misconfigured `sigOpCount` causes
-submission-time rejection, never post-confirmation failure — no
-fund-loss scenario exists.
+This is fail-closed: a `sigOpCount` smaller than execution
+consumes causes submission-time rejection, never post-confirmation
+failure — no fund-loss scenario exists for this specific
+misconfiguration.
 
 # Partial signature encoding
 
@@ -204,7 +248,13 @@ where:
   followed by the 1-byte SIGHASH flag (typically `0x01` for
   `SIGHASH_ALL`)
 * signatures are ordered by each signer's pubkey position in the
-  lex-sorted redeem script (ascending) — not by ceremony order
+  lex-sorted redeem script (ascending) — not by ceremony order.
+  This ordering is what lets `sigOpCount = M` be tight at
+  validation time. Out-of-order assembly causes the multisig
+  verifier to retry later pubkeys for earlier signatures,
+  consuming extra sig ops; in the worst case a mis-ordered bundle
+  can exhaust the pubkey list before matching all M signatures and
+  be rejected with `TxScriptError::NullFail`
 * only the first M signatures are included; any additional partial
   signatures that may be present in the bundle are discarded
 * the redeem script is pushed with `OP_PUSHDATA1` (0x4C)
@@ -218,18 +268,27 @@ that requires a dummy element on the stack.
 
 ## Rationale
 
-This behavior already exists in Kaspa consensus (see
-`rusty-kaspa/crypto/txscript/` and the test vector at
-`crypto/txscript/src/lib.rs:1000`). The purpose of documenting it
-here is so that wallet authors porting PSBT-multisig logic from
-the Bitcoin ecosystem do not discover it via mainnet broadcast
-rejection — the default Bitcoin-tooling behavior produces a
-`sig_script` with a leading OP_0, which Kaspa rejects with
-`"stack contains 1 unexpected items"`.
+Kaspa's `OpCheckMultiSig` semantics are defined by
+`op_check_multisig_schnorr_or_ecdsa` in
+`rusty-kaspa/crypto/txscript/src/lib.rs`. Concrete test vectors
+for both Schnorr and ECDSA multisig (1-of-2, 2-of-2, wrong-signer
+and insufficient-signer rejection cases) live in
+`rusty-kaspa/crypto/txscript/src/standard/multisig.rs` and
+demonstrate the expected unlock script shape: the signature
+script is assembled directly as `<sig1><sig2>...<sigM>`
+concatenated with the redeem-script push, with no OP_0 dummy.
+
+This differs from Bitcoin's `OP_CHECKMULTISIG`, which carries an
+off-by-one legacy bug requiring a dummy element on the stack.
+Wallet code that ports from Bitcoin tooling typically produces a
+`sig_script` with a leading OP_0; Kaspa's script engine rejects
+it with `TxScriptError::CleanStack`, whose Display form is
+`"stack contains 1 unexpected items"`. Stating the unlock shape
+explicitly here saves a debug round-trip.
 
 This is fail-closed: a misassembled `sig_script` causes
 submission-time rejection, never post-confirmation failure — no
-fund-loss scenario exists.
+fund-loss scenario exists for this specific misconfiguration.
 
 # Wallet descriptor — two-layer format
 
@@ -276,11 +335,20 @@ the transport channel, wallets MAY exchange a compact binary form:
 [version: 1 byte = 0x01]
 [M: 1 byte]
 [N: 1 byte]
-[cosigner 1: 65 bytes compressed pubkey with key-origin]
-[cosigner 2: 65 bytes compressed pubkey with key-origin]
+[cosigner 1: 65 bytes — 33-byte compressed pubkey || 32-byte chain_code]
+[cosigner 2: 65 bytes — 33-byte compressed pubkey || 32-byte chain_code]
 ...
-[cosigner N: 65 bytes compressed pubkey with key-origin]
+[cosigner N: 65 bytes — 33-byte compressed pubkey || 32-byte chain_code]
 ```
+
+Each cosigner entry is a fixed-width 65-byte payload equivalent to
+the "body" of a BIP32 extended public key (the 33-byte compressed
+pubkey and its 32-byte chain_code), without the 4-byte version
+prefix, 1-byte depth, 4-byte parent fingerprint, 4-byte child
+number, or the Base58Check wrapper that `kpub...` encoding carries.
+Both cosigners in a ceremony share a known account-level derivation
+path (typically `m/44'/111111'/0'`), so depth and child-number
+context are inferred at the receiving end rather than transmitted.
 
 Total: `6 + 65 * N` bytes. For 2-of-3: 201 bytes — fits in a
 single QR code with room to spare, or a single NFC burst.
@@ -336,14 +404,24 @@ across multiple QR codes using the following framing per payload:
 ```
 
 Frame payload capacity depends on the receiving camera's optical
-envelope. Useful reference points:
+envelope and the QR error-correction level chosen. Useful
+reference points for byte-mode payload (authoritative values from
+ISO/IEC 18004), with 3 bytes deducted for the framing header
+above:
 
-* V6 byte-mode ECC-L: ~104 B payload per frame
-* V9 byte-mode ECC-L: ~180 B payload per frame
-* V14 byte-mode ECC-L: ~334 B payload per frame
+* V6 byte-mode ECC-L: 134 B raw, 131 B payload per frame
+* V9 byte-mode ECC-L: 230 B raw, 227 B payload per frame
+* V14 byte-mode ECC-L: 458 B raw, 455 B payload per frame
 
-A 3.2 KB PSKB is 31 frames at V6, 18 frames at V9, 10 frames at
-V14. Selection should trade off camera capability against decode
+A minimal 2-of-3 single-input PSKB measured at 2656 bytes in a
+representative ceremony; a fuller PSKB with all three cosigners'
+`bip32Derivations` populated is closer to 3.2 KB. Frame counts
+(ceiling division, including framing header):
+
+* 2.6 KB PSKB: 21 / 12 / 6 frames at V6-L / V9-L / V14-L
+* 3.2 KB PSKB: 25 / 15 / 8 frames at V6-L / V9-L / V14-L
+
+Selection should trade off camera capability against decode
 reliability.
 
 ## NFC / USB / short-range
@@ -369,19 +447,32 @@ frame the motivation for a future upstream discussion.
 
 ## A.1 Omit `bip32Derivations` in hardware-wallet flows
 
-`bip32_derivations` is `Option<...>` in the upstream type, meaning
-its absence is already spec-legal. Each entry carries a 4-byte
-fingerprint plus a derivation path (~28 bytes typical), costing
-60-80 bytes per cosigner per input after JSON encoding.
+`Input::bip32_derivations` is declared as
+`BTreeMap<PublicKey, Option<KeySource>>` in `kaspa-wallet-pskt`.
+An empty map is spec-legal and serializes to an empty JSON object
+(`{}`, 2 bytes) on the wire. Each populated entry carries a
+compressed pubkey key plus a `KeySource` value
+(`{keyFingerprint, derivationPath}`). Measured on a
+representative entry with a 5-level BIP-44 path
+(`m/44h/111111h/0h/0/0`), the on-wire cost is approximately
+**139 bytes per cosigner per input** after camelCase JSON
+serialization.
 
 When a wallet descriptor has been established out-of-band during
-setup, the signing device already knows its own derivation —
-`bip32Derivations` provides no additional information and can be
-omitted. Proposed opt-in mechanism: a `"minimal": true` flag on
-the PSKT global indicating the creator has deliberately omitted
-this field.
+setup, the signing device already knows its own derivation path —
+`bip32Derivations` provides no additional information to the
+signer and could be emitted as an empty map by mutual agreement.
+A proposed opt-in mechanism: a `"minimal": true` flag on the PSKT
+global indicating the creator has deliberately elided cosigner
+key-origin metadata. Signers that don't recognize the flag see an
+empty map and fall back to descriptor-driven derivation.
 
-Savings on a 2-of-3 single-input PSKB: 180-240 bytes.
+Measured savings on a PSKB where the creator has populated
+`bip32Derivations` with one entry per cosigner (3 entries for a
+2-of-3): ~417 bytes per input. If the PSKB carries only the
+signer's own entry (1 per input, a common pattern), savings are
+~139 bytes per input. On a three-input PSKB with full
+three-cosigner population: ~1.25 KB.
 
 ## A.2 Drop `scriptPublicKey` version prefix when zero
 
@@ -409,12 +500,17 @@ Savings: ~30 bytes per input on typical PSKBs.
 
 ## A.4 Binary framing
 
-JSON + hex introduces approximately 2x overhead before any content
-is considered. A bincode-serialized alternative — when both
-endpoints advertise support via a version bit in the magic prefix —
-uses the same struct layout `kaspa-wallet-pskt` already serializes
-internally via `serde_bincode`. Ceremonies using bincode framing
-are approximately half the wire size of JSON+hex ceremonies.
+JSON + hex doubles the wire size of binary-typed fields (every
+byte costs 2 hex characters), and JSON object keys add further
+overhead. `kaspa-wallet-pskt` already has `bincode = "1.3.3"` in
+its direct dependency list, so the machinery for an opt-in binary
+envelope is already in the tree; a wire-format change would
+amount to adding a magic prefix bit advertising binary framing
+and calling the existing bincode entry points rather than
+`serde_json::to_string`. A browser-side gzip measurement on a
+representative 2-of-3 multisig PSKB observed roughly 3:1
+compression of the JSON form (2656 → 852 bytes), suggesting
+comparable savings are achievable from a binary format alone.
 
 This is the most significant of the four proposals. It is the
 right subject for a PSKT v2 discussion upstream, not a unilateral
@@ -442,7 +538,7 @@ At time of writing:
   `submit_consensus_tx` without intermediate formats.
 
 Other implementations (Keystone, KasWare, Tangem, Ledger, Kaspium,
-etc.) are invited to add entries as they ship conforming
+Kaspa-NG, etc.) are invited to add entries as they ship conforming
 support. The intent is for this appendix to grow into a compat
 matrix across the Kaspa wallet ecosystem over time.
 
@@ -453,12 +549,15 @@ matrix across the Kaspa wallet ecosystem over time.
   cosigners depending on exchange order. Mandatory sorting
   eliminates this class of bug.
 * **Sig-op accounting and script-assembly quirks are
-  fail-closed.** Wallets that set `sigOpCount` incorrectly, or
-  that assemble the `sig_script` with a leading OP_0, fail at
-  broadcast time (rejected by node), never at confirmation time.
-  No fund-loss scenario exists for these specific
-  misconfigurations — a rejected transaction leaves the UTXO
-  untouched.
+  fail-closed.** A `sigOpCount` set below `M` causes consensus to
+  reject the transaction at broadcast time with
+  `TxScriptError::ExceededSigOpLimit`. The `sig_script` assembly
+  with a leading OP_0 likewise fails at broadcast, with
+  `TxScriptError::CleanStack`. These misconfigurations never
+  confirm and never produce a fund-loss scenario — a rejected
+  transaction leaves the UTXO untouched. Setting `sigOpCount`
+  above `M` (up to `N`) is consensus-valid but wastes
+  mass-budget and is discouraged by the conventions in this KIP.
 * **PSKT itself carries no private-key material.** `partialSigs`
   entries are public signatures. PSKB bundles can be safely
   transmitted over untrusted channels (QR, NFC, email, IPFS,
@@ -483,6 +582,93 @@ PSKB and processes it normally.
 
 This KIP does not propose or require any consensus change.
 
+# Technical references
+
+This section collects the specific functions and types in
+`rusty-kaspa` that a wallet implementing this KIP interacts with.
+It is informational — the normative rules are in the sections
+above — and is provided so that implementers know exactly which
+upstream hooks their code connects to.
+
+## Upstream PSKT integration points
+
+**`kaspa_wallet_pskt::pskt::PSKT<Finalizer>::finalize_sync`** — the
+crate's finalize entry point. It takes a caller-supplied closure
+`final_sig_fn: FnOnce(&Inner) -> Result<Vec<Vec<u8>>, E>` and
+stores the returned bytes as each input's `final_script_sig`. The
+closure is the wallet's responsibility; it is where the sig_script
+assembly rules in this KIP apply. Upstream does not assemble
+multisig unlock scripts itself — the closure must produce
+`signature_bytes || add_data(redeem_script)` for each P2SH
+multisig input, following the conventions specified in this KIP.
+
+**`kaspa_txscript::script_builder::ScriptBuilder::add_data`** — the
+canonical helper for pushing data with the correct opcode
+selection. At data length ≤ 75 bytes it emits a direct `OpData{n}`
+push; at 76–255 bytes it emits `OpPushData1` + 1-byte length;
+above that, `OpPushData2`. Wallets SHOULD use this helper rather
+than open-coding push opcodes, which matches how Kaspa test
+vectors and reference scripts are written.
+
+**`kaspa_txscript::standard::pay_to_script_hash_signature_script`** —
+the canonical P2SH sig_script assembler. Given concatenated
+signature pushes and a redeem script, it produces
+`signature_pushes || add_data(redeem_script)`. This is the shape
+the multisig rules in this KIP conform to.
+
+**`PartialSigs = BTreeMap<secp256k1::PublicKey, Signature>`** (see
+`kaspa_wallet_pskt::pskt::PartialSigs`). The crate stores per-input
+partial signatures in a BTreeMap keyed by the 33-byte compressed
+pubkey. The `Ord` implementation of `secp256k1::PublicKey` (via
+`secp256k1_ec_pubkey_cmp`) is lexicographic on the 33-byte
+compressed serialization, so BTreeMap iteration order matches the
+KIP's ordering for **ECDSA** multisig (where the redeem script
+also uses 33-byte compressed pubkeys). For **Schnorr** multisig,
+where the redeem script uses 32-byte x-only pubkeys, BTreeMap
+iteration order does NOT in general match the redeem-script order
+— the 1-byte parity prefix on the 33-byte compressed form can
+invert the comparison relative to the 32-byte x-only form. Wallets
+finalizing a Schnorr P2SH multisig input MUST therefore explicitly
+re-sort partial signatures by each signer's 32-byte x-only pubkey
+position in the redeem script (see "Final `sig_script` assembly"
+above); relying on BTreeMap's default iteration is a silent
+correctness bug for Schnorr multisig.
+
+**`kaspa_wallet_pskt::pskt::Signature`** — enum with variants
+`ECDSA(secp256k1::ecdsa::Signature)` and
+`Schnorr(secp256k1::schnorr::Signature)`. Serde-serialized with
+`#[serde(rename_all = "camelCase")]` at the enum level, which
+lower-cases the variant names on the wire to `ecdsa` and
+`schnorr`. Signatures are stored as raw 64-byte payloads; the
+1-byte SIGHASH flag is not part of `Signature` and MUST be
+appended by the wallet during sig_script assembly.
+
+## Consensus validation reference
+
+**`kaspa_txscript::op_check_multisig_schnorr_or_ecdsa`**
+(`crypto/txscript/src/lib.rs`) — the script engine's multisig
+verification path. Walks signatures and pubkeys with a single
+forward-only iterator, consuming one sig-op from the runtime
+counter per pubkey probe. This is the function whose behavior
+determines the tight-vs-upper-bound semantics of
+`sigOpCount`.
+
+**`kaspa_txscript::get_sig_op_count`**
+(`crypto/txscript/src/lib.rs`) — simulates input validation and
+returns the exact number of sig-ops consumed for a given
+`sig_script` + `script_public_key` combination. Wallets
+unsure which `sigOpCount` value to set for an input can call
+this and use the returned value as the tight bound.
+
+**Limits.** `MAX_SCRIPT_ELEMENT_SIZE = 520` (max single push data
+size), `MAX_PUB_KEYS_PER_MULTISIG = 20` (max cosigners in a
+single `OpCheckMultiSig`). For reference: a 20-of-20 Schnorr
+redeem script is `2 + 20*33 + 2 + 1 = 665` bytes (M and N each
+encoded as `OpData1 + 1 byte` since values above 16 do not have
+small-int opcodes; each pubkey pushed as `OpData32 + 32 bytes`),
+which is well below the 10,000-byte `MAX_SCRIPTS_SIZE` limit. No
+multisig of practical size is at risk of script-size rejection.
+
 # Acknowledgements
 
 Thanks to Michael Sutton and the `kaspa-wallet-pskt` maintainers
@@ -490,3 +676,10 @@ for the upstream PSKT crate that this KIP builds on. Thanks also
 to the Kaspa community members active on hardware wallet support
 and multisig (the multisig issue `rusty-kaspa#254` framed the
 original problem space).
+
+Thanks to Maksim Biryukov (@biryukovmaxim) for review feedback
+on a preview of this KIP — in particular for correcting the
+`sigOpCount` rule from a fixed `N` to the range `M ≤ sigOpCount
+≤ N` and pointing at the authoritative `get_sig_op_count` and
+`op_check_multisig_schnorr_or_ecdsa` implementations in
+`rusty-kaspa/crypto/txscript/src/lib.rs`.
