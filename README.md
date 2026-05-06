@@ -15,3 +15,4 @@ Kaspa Improvement Proposals (KIPs) describe standard proposals for the Kaspa net
 | [13](kip-0013.md) | Consensus | Transient Storage Handling | Michael Sutton, coderofstuff | Active |
 | [14](kip-0014.md) | Consensus | The Crescendo Hardfork | Michael Sutton | Active |
 | [15](kip-0015.md) | Consensus | Canonical Transaction Ordering and Sequencing Commitments | Mike Zak, Ro Ma | Active |
+| [23](kip-0023.md) | Node, API/RPC | DNS-resolved peer addresses | Dmitry Perchanov | Proposed |
