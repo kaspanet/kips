@@ -18,3 +18,4 @@ Kaspa Improvement Proposals (KIPs) describe standard proposals for the Kaspa net
 | [16](kip-0016.md) | Consensus, Script Engine | ZK Precompile Opcode | Alexander Safstrom | Implemented and activated in TN10 |
 | [20](kip-0020.md) | Consensus, Script Engine | Covenant IDs | Michael Sutton | Implemented and activated in TN10 |
 | [21](kip-0021.md) | Consensus, Chain-Block UTXO Validation | Partitioned Sequencing Commitment with O(activity) Proving | Michael Sutton, Maxim Biryukov, Hans Moog | Implemented and activated in TN10 |
+| [25](kip-0025.md) | Consensus, Script Engine, Compute Mass | Compute Budget for Script Execution | Ori Newman, Michael Sutton, Romain Billot | Implemented and activated in TN10 |
