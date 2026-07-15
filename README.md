@@ -15,7 +15,7 @@ Kaspa Improvement Proposals (KIPs) describe standard proposals for the Kaspa net
 | [13](kip-0013.md) | Consensus | Transient Storage Handling | Michael Sutton, coderofstuff | Active |
 | [14](kip-0014.md) | Consensus | The Crescendo Hardfork | Michael Sutton | Active |
 | [15](kip-0015.md) | Consensus | Canonical Transaction Ordering and Sequencing Commitments | Mike Zak, Ro Ma | Active |
-| [16](kip-0016.md) | Consensus, Script Engine | ZK Precompile Opcode | Alexander Safstrom | Implemented and activated in TN10 |
-| [17](kip-0017.md) | Consensus, Script Engine | Covenants and Improved Scripting Capabilities | Ori Newman | Implemented and activated in TN10 |
-| [20](kip-0020.md) | Consensus, Script Engine | Covenant IDs | Michael Sutton | Implemented and activated in TN10 |
-| [21](kip-0021.md) | Consensus, Chain-Block UTXO Validation | Partitioned Sequencing Commitment with O(activity) Proving | Michael Sutton, Maxim Biryukov, Hans Moog | Implemented and activated in TN10 |
+| [16](kip-0016.md) | Consensus, Script Engine | ZK Precompile Opcode | Alexander Safstrom | Active |
+| [17](kip-0017.md) | Consensus, Script Engine | Covenants and Improved Scripting Capabilities | Ori Newman | Active |
+| [20](kip-0020.md) | Consensus, Script Engine | Covenant IDs | Michael Sutton | Active |
+| [21](kip-0021.md) | Consensus, Chain-Block UTXO Validation | Partitioned Sequencing Commitment with O(activity) Proving | Michael Sutton, Maxim Biryukov, Hans Moog | Active |
