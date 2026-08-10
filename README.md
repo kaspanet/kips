@@ -12,6 +12,7 @@ Kaspa Improvement Proposals (KIPs) describe standard proposals for the Kaspa net
 | [6](kip-0006.md) | Consensus, Applications | Proof of Chain Membership (PoChM) | Shai Wyborski | Draft |
 | [9](kip-0009.md) | Consensus, Mempool, P2P | Extended mass formula for mitigating state bloat | Michael Sutton, Ori Newman, Shai Wyborski, Yonatan Sompolinsky | Active |
 | [10](kip-0010.md) | Consensus, Script Engine | New Transaction Opcodes for Enhanced Script Functionality | Maxim Biryukov, Ori Newman | Active |
+| [12](kip-0012.md) | Applications | Specification for Browser Extension Wallet APIs | aspect, saefstroem, KaffinPX, mattoo, IzioDev, Shawn Pearce | Draft |
 | [13](kip-0013.md) | Consensus | Transient Storage Handling | Michael Sutton, coderofstuff | Active |
 | [14](kip-0014.md) | Consensus | The Crescendo Hardfork | Michael Sutton | Active |
 | [15](kip-0015.md) | Consensus | Canonical Transaction Ordering and Sequencing Commitments | Mike Zak, Ro Ma | Active |
