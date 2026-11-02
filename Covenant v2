@@ -1,0 +1,12 @@
+
+what if a covenant is more than what is now 
+
+examples 
+
+Public: a covenant address/identity and proof that the covenant exists. (users can switch to convant address or received kaspa directly into their covenant address) 
+
+Private: a covenant balance and transaction amounts/history. (hidden by value in text form only on chain)
+
+Verifiable: the network can validate ownership, available funds, and valid state transitions without revealing the underlying values.
+
+what do you think about this 
